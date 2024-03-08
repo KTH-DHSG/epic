@@ -13,12 +13,12 @@ The instructions here provided were tested in Ubuntu 20.04 and 22.04 operating s
 cd ~
 git clone git@github.com:Pedro-Roque/epic.git
 ```
-2. Run `poetry install` inside the cloned folder
+3. Run `poetry install` inside the cloned folder
 ```bash
 cd ~/epic
 poetry install
 ```
-3. Run a demo
+4. Run the demo!
 
 ## Running a demo:
 To run the provided example, run: 
