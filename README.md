@@ -11,7 +11,7 @@ The instructions here provided were tested in Ubuntu 20.04 and 22.04 operating s
 2. Clone this repository to your local home folder
 ```bash
 cd ~
-git clone git@github.com:Pedro-Roque/epic.git
+git clone git@github.com:KTH-DHSG/epic.git
 ```
 3. Run `poetry install` inside the cloned folder
 ```bash
