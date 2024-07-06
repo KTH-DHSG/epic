@@ -119,8 +119,6 @@ class IBRC(object):
         self.V_E1 = set_emat_matrix_with_emat(self.E, self.my_cam, self.cam1)
         return
 
-
-
     def set_emat_matrix(self, Emat):
 
         E_mat = Emat.reshape((3, 3))

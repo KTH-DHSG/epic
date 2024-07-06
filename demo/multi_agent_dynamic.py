@@ -17,6 +17,8 @@ INTERACTIVE_PLOT_TIME_STEP = 1  # in seconds
 TEST = "random"  # generate random initial conditions
 followers_cameras = ["perspective", "parabolic", "hyperbolic", "parabolic", "perspective"]
 camera_leader = "perspective"
+trigger_local_minima = False
+change_features = False
 # -----------------------------------------------------------------------------
 #                            END SIMULATION SETUP
 # -----------------------------------------------------------------------------
@@ -30,7 +32,7 @@ STATIC_TEST = False
 class SimulationThreeAgents(object):
     def __init__(self):
         # Set number of runs
-        self.sim_time = 10
+        self.sim_time = 15
         self.dt = 0.1
         self.sim_time_steps = int(self.sim_time / self.dt)
         self.method = "mpibvs"
@@ -48,13 +50,13 @@ class SimulationThreeAgents(object):
         # Generate world points
         self.w_points = np.array(
             [
-                [0, 0.5, -0.5, 0, 0.5],
-                [0, -0.5, 0.5, 0.5, 0.1],
-                [5, 5, 5, 5, 5],
+                [0, 0.5, -0.5, 0, 0.5, 0.25],
+                [0, -0.5, 0.5, 0.5, 0.1, 0.35],
+                [5, 5, 5, 5, 5, 5],
             ]
         )
 
-        self.w_points_h = np.concatenate((self.w_points, np.ones((1, 5))), axis=0)
+        self.w_points_h = np.concatenate((self.w_points, np.ones((1, self.w_points.shape[1]))), axis=0)
 
     def run(self):
         """
@@ -107,7 +109,13 @@ class SimulationThreeAgents(object):
                 followers[i].set_formation_pose(
                     desired_state
                 )
-                start_state = desired_state + .1 * np.random.rand(7,)
+                if trigger_local_minima:
+                    pos_error = 3.0
+                    quat_error = 0.5
+                else:
+                    pos_error = 0.5
+                    quat_error = 0.2
+                start_state = desired_state + np.hstack((pos_error * np.random.rand(3,), quat_error * np.random.rand(4,)))
                 start_state[3:] = start_state[3:] / np.linalg.norm(start_state[3:])
                 followers[i].set_state(
                     start_state
@@ -149,6 +157,7 @@ class SimulationThreeAgents(object):
                         self.w_points_h,
                         my_cam=followers[i],
                         cam1=followers[i].neighbors[0],
+                        change_features=change_features
                     )
                     received_data_cam1 = {
                         "csi": followers[i].neighbors[0].csi,
@@ -172,6 +181,7 @@ class SimulationThreeAgents(object):
                         my_cam=followers[i],
                         cam1=followers[i].neighbors[0],
                         cam2=followers[i].neighbors[1],
+                        change_features=change_features
                     )
                     received_data_cam1 = {
                         "csi": followers[i].neighbors[0].csi,
@@ -220,7 +230,7 @@ class SimulationThreeAgents(object):
         self.plotter.plot_velocity_input(velocity_type="angular")
         self.plotter.plot_cpu_times()
         input("click Enter for animation...")
-        self.plotter.create_animation(wpoints=self.w_points, save_video=False,
+        self.plotter.create_animation(wpoints=self.w_points, save_video=False, show_trajectory=True,
                                       folder=os.path.dirname(__file__) + "/output/")
         self.plotter.plot_block()
 

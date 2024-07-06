@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.spatial.transform import Rotation as Rlib
 import matplotlib.pyplot as plt
 
 from epic.utils.geometry import r_mat, get_relative_pose
@@ -64,7 +65,7 @@ class Plotter(object):
         :rtype: Axes3d
         """
 
-        rmat = camera.get_attitude_rmat()
+        rmat = r_mat(camera.get_state()[3:]).T
         pos = camera.get_position()
 
         ax.plot(
@@ -872,14 +873,45 @@ class Plotter(object):
         ax.plot(t, error, c=color)
         # ax.plot(t, distance_error)
 
+    def plot_cam_attitude_error(self, leader, camera, ax, color):
+        """
+        Calculates and plots formation attitude error
+
+        :param leader: formatino leader
+        :type leader: GeneralizedCamera
+        :param camera: camera to calculate the error for
+        :type camera: GeneralizedCamera
+        :param ax: axis to plot on
+        :type ax: matplotlib.Axes
+        """
+        error = np.zeros((camera.log['state'].shape[1], 1))
+        for i in range(camera.log['state'].shape[1]):
+            leader_pose = leader.log['state'][:, i]
+            camera_pose = camera.log['state'][:, i]
+            R, t = get_relative_pose(leader_pose, camera_pose)
+            Rf, tf = get_relative_pose(leader.get_formation_pose(), camera.get_formation_pose())
+
+            # Current and desired quat
+            q = Rlib.from_matrix(R).as_quat()
+            qd = Rlib.from_matrix(Rf).as_quat()
+
+            # Calculate quaternion distance
+            q_error = np.arccos(2 * np.dot(q, qd)**2 - 1)
+            error[i] = q_error * 57.2958  # Rad to degrees
+
+        t = np.linspace(0, error.shape[0] * camera.dt, error.shape[0])
+        ax.plot(t, error, c=color)
+
     def plot_formation_error(self, camera_list: list = None):
         """
         Plot formation error
         """
-        if not hasattr(self, "pose_error_ax"):
+        if not hasattr(self, "pose_error_ax") or not hasattr(self, "pose_ori_error_ax"):
             fig3 = plt.figure()
-            self.pose_error_ax = fig3.add_subplot(111)
+            self.pose_error_ax = fig3.add_subplot(211)
+            self.pose_ori_error_ax = fig3.add_subplot(212)
         self.pose_error_ax.clear()
+        self.pose_ori_error_ax.clear()
         if camera_list is None:
             camera_list = self.camera_list
 
@@ -895,15 +927,71 @@ class Plotter(object):
             # Append name to legend and plot it
             legend.append(camera.name)
             self.plot_cam_formation_error(leader, camera, self.pose_error_ax, color=color[i])
+            self.plot_cam_attitude_error(leader, camera, self.pose_ori_error_ax, color=color[i])
 
-        self.pose_error_ax.set_xlabel("Time [s]")
+        self.pose_ori_error_ax.set_xlabel("Time [s]")
         self.pose_error_ax.set_ylabel("Formation error [m]")
+        self.pose_ori_error_ax.set_ylabel("Attitude error [deg]")
         self.pose_error_ax.legend(legend)
         self.pose_error_ax.grid()
+        self.pose_ori_error_ax.legend(legend)
+        self.pose_ori_error_ax.grid()
         plt.show(block=False)
         plt.pause(0.001)
 
-    def create_animation(self, wpoints, save_video=False, folder=None):
+    def bearing_formation_error(self, camera_list: list = None):
+        """
+        Plot bearing formation error
+        """
+        if not hasattr(self, "bearing_error_ax"):
+            fig3 = plt.figure()
+            self.pose_error_ax = fig3.add_subplot(211)
+            self.pose_ori_error_ax = fig3.add_subplot(212)
+        self.pose_error_ax.clear()
+        self.pose_ori_error_ax.clear()
+        if camera_list is None:
+            camera_list = self.camera_list
+
+        legend = []
+        leader = None
+        color = ["b", "r", "g", "b", "k", "c", "r"]
+        for i, camera in enumerate(camera_list):
+            # Skip leader
+            if camera.name == "Leader":
+                leader = camera
+                continue
+
+            # Append name to legend and plot it
+            legend.append(camera.name)
+            self.plot_cam_bearing_error(leader, camera, self.pose_error_ax, color=color[i])
+            self.plot_cam_attitude_error(leader, camera, self.pose_ori_error_ax, color=color[i])
+
+        self.pose_ori_error_ax.set_xlabel("Time [s]")
+        self.pose_error_ax.set_ylabel("Formation error [m]")
+        self.pose_ori_error_ax.set_ylabel("Attitude error [deg]")
+        self.pose_error_ax.legend(legend)
+        self.pose_error_ax.grid()
+        self.pose_ori_error_ax.legend(legend)
+        self.pose_ori_error_ax.grid()
+        plt.show(block=False)
+        plt.pause(0.001)
+
+    def plot_cam_bearing_error(self, leader, camera, ax, color):
+        """
+        Calculates and plots bearing formation error
+
+        :param leader: formatino leader
+        :type leader: GeneralizedCamera
+        :param camera: camera to calculate the error for
+        :type camera: GeneralizedCamera
+        :param ax: axis to plot on
+        :type ax: matplotlib.Axes
+        """
+        error = camera.log['error'].flatten()
+        t = np.linspace(0, error.shape[0] * camera.dt, error.shape[0])
+        ax.plot(t, error, c=color)
+
+    def create_animation(self, wpoints, save_video=False, show_trajectory=False, folder=None):
         """
         Create a 3D animation
         """
@@ -944,6 +1032,11 @@ class Plotter(object):
                     np.array([s1[0], s1[1], s1[2], s1[6], s1[3], s1[4], s1[5]]), normalize_quaternions=False
                 )
                 pc.plot_camera(ax, K, cam2world_transform, sensor_size=np.array([1, 1]), virtual_image_distance=0.2, c=c[i])
+                # Plot position
+                if show_trajectory:
+                    t1 = cam.log['state'][:, 0:t]
+                    t1 = t1[0:3, :]
+                    ax.plot(t1[0, :], t1[1, :], t1[2, :], c=c[i])
             ax.scatter(wpoints[0, :], wpoints[1, :], wpoints[2, :], color="k", s=2)
             ax.set_xlim((-2, 2))
             ax.set_ylim((-2, 2))

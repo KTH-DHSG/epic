@@ -47,7 +47,6 @@ class Imaging:
 
         elif self.type == "hyperbolic":
             self.csi = self.cam_d / (np.sqrt(self.cam_d**2 + 4 * self.cam_p**2))
-            print("csi: ", self.csi)
             self.csi = 0.95
         elif self.type == "parabolic":
             self.csi = 1.0

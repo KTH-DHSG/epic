@@ -306,7 +306,7 @@ def get_range_to(cam1, cam2):
 def r_mat(q):
     """
     Generate a symbolic rotation matrix from unit quaternion,
-    following Trawny's paper transform G->L. That is:
+    following Trawny's paper transform. That is:
     p^G = r_mat(q) @ p^L
 
     Indirect Kalman Filter for 3D Attitude Estimation,
@@ -553,7 +553,7 @@ def get_deviated_quat(q, angle_dev, axis=np.array([0, 0, 1])):
     return q_rnd
 
 
-def get_matched_features(w_points_h, my_cam, cam1, cam2=None, visible=False):
+def get_matched_features(w_points_h, my_cam, cam1, cam2=None, visible=False, change_features=False, t_int: tuple = None):
     """
     Get matched features between two cameras.
 
@@ -565,6 +565,12 @@ def get_matched_features(w_points_h, my_cam, cam1, cam2=None, visible=False):
     :type cam1: GeneralizedCamera
     :param cam2: camera 3, defaults to None
     :type cam2: GeneralizedCamera, optional
+    :param visible: use visible points, defaults to False
+    :type visible: bool, optional
+    :param change_features: change features either randomly or at time trigger, defaults to False
+    :type change_features: bool, optional
+    :param t_int: tuple of current time and trigger time, defaults to None
+    :type t_int: tuple, optional
     :return: match dictionary
     :rtype: dict
     """
@@ -590,11 +596,28 @@ def get_matched_features(w_points_h, my_cam, cam1, cam2=None, visible=False):
             )
 
         else:
+            if change_features:
+                # Assign new features
+                if t_int is not None:
+                    # Time-triggered feature change
+                    curr_time = t_int[0]
+                    trigger_time = t_int[1]
+
+                    if curr_time < trigger_time:
+                        common_5 = [0, 1, 2, 3, 4]
+                    else:
+                        common_5 = [0, 1, 2, 3, 5]
+                else:
+                    # Random feature change
+                    common_5 = np.random.choice(np.arange(w_points_h.shape[1]), 5, replace=False)
+            else:
+                # Keep same features
+                common_5 = [0, 1, 2, 3, 4]
             l_px_points_h, l_u_points_h, l_viz_z = cam1.get_image_points(
-                w_points_h
+                w_points_h[:, common_5]
             )
             f1_px_points_h, f1_u_points_h, f1_viz_z = my_cam.get_image_points(
-                w_points_h
+                w_points_h[:, common_5]
             )
         mf_dict = {
             "cam1_u_h": l_u_points_h,
@@ -630,14 +653,31 @@ def get_matched_features(w_points_h, my_cam, cam1, cam2=None, visible=False):
             )
 
         else:
+            if change_features:
+                # Assign new features
+                if t_int is not None:
+                    # Time-triggered feature change
+                    curr_time = t_int[0]
+                    trigger_time = t_int[1]
+
+                    if curr_time < trigger_time:
+                        common_5 = [0, 1, 2, 3, 4]
+                    else:
+                        common_5 = [0, 1, 2, 3, 5]
+                else:
+                    # Random feature change
+                    common_5 = np.random.choice(np.arange(w_points_h.shape[1]), 5, replace=False)
+            else:
+                # Keep same features
+                common_5 = [0, 1, 2, 3, 4]
             l_px_points_h, l_u_points_h, l_viz_z = cam1.get_image_points(
-                w_points_h
+                w_points_h[:, common_5]
             )
             f1_px_points_h, f1_u_points_h, f1_viz_z = cam2.get_image_points(
-                w_points_h
+                w_points_h[:, common_5]
             )
             f2_px_points_h, f2_u_points_h, f2_viz_z = my_cam.get_image_points(
-                w_points_h
+                w_points_h[:, common_5]
             )
 
         # Stack normalized neighbors observations
@@ -655,3 +695,58 @@ def get_matched_features(w_points_h, my_cam, cam1, cam2=None, visible=False):
         }
 
     return mf_dict
+
+
+def get_matched_features_from_neighbors(w_points_h, my_cam, neighbors: list, visible=False):
+    """
+    Get matched features between two cameras.
+
+    :param w_points_h: world points in homogeneous coordinates
+    :type w_points_h: np.ndarray
+    :param my_cam: camera 1
+    :type my_cam: GeneralizedCamera
+    :param cam1: camera 2
+    :type cam1: GeneralizedCamera
+    :param cam2: camera 3, defaults to None
+    :type cam2: GeneralizedCamera, optional
+    :return: match dictionary
+    :rtype: dict
+    """
+    # Pairwise matching
+    neighbors_mf_list = []
+    for i, neighbor in enumerate(neighbors):
+        if visible:
+            _, _, l_w_pts_idx = neighbor.get_visible_points(w_points_h)
+            _, _, f1_w_pts_idx = my_cam.get_visible_points(w_points_h)
+
+            # Get common points
+            all_common = list(set(l_w_pts_idx).intersection(f1_w_pts_idx))
+            if len(all_common) < 5:
+                print("Not enough common observations... Skipping test")
+                exit()
+            common_5 = all_common[0:5]
+
+            # Get common camera observations
+            l_px_points_h, l_u_points_h, l_viz_z = neighbor.get_image_points(
+                w_points_h[:, common_5]
+            )
+            f1_px_points_h, f1_u_points_h, f1_viz_z = my_cam.get_image_points(
+                w_points_h[:, common_5]
+            )
+
+        else:
+            l_px_points_h, l_u_points_h, l_viz_z = neighbor.get_image_points(
+                w_points_h
+            )
+            f1_px_points_h, f1_u_points_h, f1_viz_z = my_cam.get_image_points(
+                w_points_h
+            )
+        mf_dict = {
+            "cam1_u_h": l_u_points_h,
+            "cam1_viz_z": l_viz_z,
+            "my_cam_u_h": f1_u_points_h,
+            "my_cam_viz_z": f1_viz_z,
+            "neighbors_matched": l_u_points_h,
+        }
+        neighbors_mf_list.append(mf_dict)
+    return neighbors_mf_list

@@ -319,34 +319,35 @@ class GeneralizedCamera(_cartesian.CartesianSpace, _imaging.Imaging):
         :type controller: Controller
         """
         self.neighbors = neighbors
-        self.ctl_type = ctl_type
-        if len(neighbors) == 0:
+        self.ctl_type = ctl_type.lower()
+        if self.ctl_type == "basic":
             import epic.control.basic as ctl
             self.controller = ctl.BasicTemplate(self, **kwargs)
-        elif len(neighbors) == 1:
+        elif self.ctl_type == "ibrc":
             import epic.control.ibrc as ctl
             self.controller = ctl.IBRC(self, neighbors[0], config_file=config, **kwargs)
-        elif len(neighbors) == 2:
+        elif self.ctl_type == "ibfc":
             import epic.control.ibfc as ctl
-            self.controller = ctl.IBFC(
-                self, neighbors[0], neighbors[1], config_file=config, **kwargs
-            )
+            self.controller = ctl.IBFC(self, neighbors[0], neighbors[1], config_file=config, **kwargs)
+        elif self.ctl_type == "bearing_rigidity":
+            raise NotImplementedError("Bearing Rigidity controller not publicly available. \
+                                       Please contact the repository maintainer.")
         else:
-            raise ValueError("Too many neighbors provided. Define neighbors as a list of length 1 or 2")
+            raise ValueError("Unknown controller type on 'set_controller' method.")
         print("Controller set for ", self)
 
     def control(self, **kwargs) -> None:
         """
         Control step.
         """
-        assert "my_points" in kwargs, "Features not provided to IBRC ctl of " + str(self)
-        assert "my_points_z" in kwargs, "Feature Depth not provided to IBRC ctl of " + str(self)
-        assert "matched_points" in kwargs, "Neighbor not provided to IBRC ctl of " + str(self)
 
         if self.controller is None:
             raise ValueError("Controller not set!")
 
         if self.ctl_type == "ibrc":
+            assert "my_points" in kwargs, "Features not provided to IBRC ctl of " + str(self)
+            assert "my_points_z" in kwargs, "Feature Depth not provided to IBRC ctl of " + str(self)
+            assert "matched_points" in kwargs, "Neighbor not provided to IBRC ctl of " + str(self)
             assert "leader" in kwargs, "Leader not provided to IBRC ctl of " + str(self)
             kwargs['my_points'] = kwargs['my_points'] / kwargs['my_points'][2, :]
             kwargs['matched_points'] = kwargs['matched_points'] / kwargs['matched_points'][2, :]
@@ -365,6 +366,9 @@ class GeneralizedCamera(_cartesian.CartesianSpace, _imaging.Imaging):
             ctl_dict = self.controller.control(t12=t12, **kwargs)
         elif self.ctl_type == "ibfc" or self.ctl_type == "basic" or self.ctl_type == "ibvs":
             ctl_dict = self.controller.control(**kwargs)
+        elif self.ctl_type == "bearing_rigidity":
+            ctl_dict = self.controller.control(**kwargs)
+
         else:
             raise ValueError("Controller type not implemented in generalized camera class.")
 

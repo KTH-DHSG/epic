@@ -209,8 +209,8 @@ class MPRVS(object):
         # Options for IPOPT Solver
         # -> IPOPT
         self.sol_options_ipopt = {
-            'ipopt.max_iter': 20,
-            'ipopt.max_resto_iter': 30,
+            #'ipopt.max_iter': 20,
+            #'ipopt.max_resto_iter': 30,
             'ipopt.print_level': 0,
             'ipopt.print_header': False,
             'print_time': False,
